@@ -1,0 +1,61 @@
+rules_version = '2';
+
+// Debt Tracker access rules
+// - Anyone with the link can view debts.
+// - Only the owner and emails on the owner's editor list can change them.
+// - Only the owner can change the editor list.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedInEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function verified() {
+      return request.auth != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function isOwner() {
+      return verified() && signedInEmail() == 'muhammadfirdaus.work@gmail.com';
+    }
+
+    function isEditor() {
+      return isOwner()
+        || (verified()
+            && exists(/databases/$(database)/documents/config/editors)
+            && signedInEmail() in get(/databases/$(database)/documents/config/editors).data.emails);
+    }
+
+    function validDebt(data) {
+      return data.keys().hasOnly(['name', 'createdAt', 'transactions'])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 100
+        && data.transactions is list
+        && data.transactions.size() > 0
+        && data.transactions.size() <= 1000;
+    }
+
+    match /debts/{debtId} {
+      allow read: if true;
+      allow create: if isEditor()
+        && validDebt(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+      // Payments only append transactions; name and creation time stay fixed.
+      allow update: if isEditor()
+        && validDebt(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['transactions'])
+        && request.resource.data.transactions.size() > resource.data.transactions.size();
+      allow delete: if isOwner();
+    }
+
+    match /config/editors {
+      allow read: if isEditor();
+      allow write: if isOwner()
+        && request.resource.data.keys().hasOnly(['emails'])
+        && request.resource.data.emails is list
+        && request.resource.data.emails.size() <= 50;
+    }
+  }
+}

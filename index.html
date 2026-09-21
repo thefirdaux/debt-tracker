@@ -299,33 +299,129 @@
     .history li:last-child {
       border-bottom: 0;
     }
+
+    /* Account + live status row (left of the + button) */
+    .toolbar {
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .account {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 10px;
+      min-width: 0;
+      font-size: 11px;
+      line-height: 13px;
+      letter-spacing: 0.06px;
+      color: #555;
+    }
+    .status::before {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 5px;
+      border-radius: 50%;
+      background: var(--color-button-border);
+      vertical-align: 1px;
+    }
+    .status[data-state="live"]::before {
+      background: #3a9a5b;
+    }
+    .link-button {
+      padding: 0;
+      border: 0;
+      background: none;
+      font-size: inherit;
+      line-height: inherit;
+      color: #000;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .account__email {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 160px;
+    }
+    .icon-button[hidden],
+    .button[hidden],
+    .link-button[hidden] {
+      display: none;
+    }
+
+    .empty {
+      padding: 24px 0;
+      text-align: center;
+      font-size: 13px;
+      line-height: 18px;
+      color: #555;
+    }
+
+    .editor-list li {
+      align-items: center;
+    }
+    .editor-list .link-button {
+      font-size: 13px;
+    }
+    .field-row {
+      display: flex;
+      gap: 8px;
+    }
+    .field-row input {
+      flex: 1;
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--color-button-border);
+      border-radius: 12px;
+      font: inherit;
+      font-size: 16px;
+    }
+    .field-row .button {
+      flex: none;
+      padding: 10px 16px;
+    }
   </style>
 </head>
 <body>
   <main class="app">
     <section class="notice" id="in-app-notice" role="alert" hidden>
-      <p class="notice__title">Your debts won't be saved here</p>
+      <p class="notice__title">Open in your browser to edit</p>
       <p class="notice__text" id="in-app-notice-text">
-        This page is open inside another app's browser, which forgets your data when it closes.
-        Open it in your phone's browser to keep your debts.
+        Google sign-in doesn't work inside another app's browser. Open this page in your phone's browser to sign in.
       </p>
       <a class="button button--filled" id="open-in-browser" href="#">Open in Safari</a>
     </section>
 
-    <section class="notice" id="save-error" role="alert" hidden>
-      <p class="notice__title">Couldn't save your changes</p>
+    <section class="notice" id="error-notice" role="alert" hidden>
+      <p class="notice__title" id="error-title">Something went wrong</p>
+      <p class="notice__text" id="error-text"></p>
+    </section>
+
+    <section class="notice" id="import-notice" hidden>
+      <p class="notice__title">Move your debts online</p>
       <p class="notice__text">
-        Your browser is blocking storage (for example in Private Browsing). Changes will be lost when you close this page.
+        Debts saved only on this phone aren't shared yet. Upload them so everyone with the link sees the same list.
       </p>
+      <button class="button button--filled" id="import-local" type="button">Upload debts from this phone</button>
     </section>
 
     <section class="summary" aria-live="polite">
       <p class="summary__name" id="owner-name">Nurul Nadhira</p>
-      <p class="summary__total" id="total-balance">MYR 0.00</p>
+      <p class="summary__total" id="total-balance">MYR —</p>
     </section>
 
     <div class="toolbar">
-      <button class="icon-button" id="add-debt" type="button" aria-label="Add debt">
+      <div class="account">
+        <span class="status" id="sync-status" data-state="connecting">Connecting…</span>
+        <span class="account__email" id="account-email" hidden></span>
+        <button class="link-button" id="manage-editors" type="button" hidden>Editors</button>
+        <button class="link-button" id="sign-in" type="button" hidden>Sign in to edit</button>
+        <button class="link-button" id="sign-out" type="button" hidden>Sign out</button>
+      </div>
+      <button class="icon-button" id="add-debt" type="button" aria-label="Add debt" hidden>
         <!-- Plus icon from Figma (node 1:164) -->
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <path d="M12 5V19M5 12H19" stroke="#A1A0A3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -366,7 +462,7 @@
       <h2 class="sheet__title">Add debt</h2>
       <label class="field">
         <span class="text-caption">Name</span>
-        <input name="name" type="text" required autocomplete="off" />
+        <input name="name" type="text" required maxlength="100" autocomplete="off" />
       </label>
       <label class="field">
         <span class="text-caption">Amount (MYR)</span>
@@ -408,28 +504,82 @@
     </div>
   </dialog>
 
-  <script>
-    const STORAGE_KEY = "debt-tracker:v1";
+  <!-- Manage editors (owner only) -->
+  <dialog class="sheet" id="editors-dialog">
+    <div class="sheet__form">
+      <h2 class="sheet__title">Who can edit</h2>
+      <p class="text-caption">
+        People listed here can add debts and payments after signing in with Google.
+        Everyone else with the link can only view.
+      </p>
+      <ul class="history editor-list" id="editor-list"></ul>
+      <form class="field-row" id="editor-form">
+        <input name="email" type="email" required placeholder="name@gmail.com" autocomplete="off" aria-label="Email to allow" class="field-input" />
+        <button class="button button--filled" type="submit">Add</button>
+      </form>
+      <button class="button button--outline button--block" type="button" data-close>Done</button>
+    </div>
+  </dialog>
 
-    // crypto.randomUUID needs a secure context, which file:// isn't in every browser.
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+    import {
+      getAuth,
+      GoogleAuthProvider,
+      onAuthStateChanged,
+      signInWithPopup,
+      signInWithRedirect,
+      signOut,
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+    import {
+      initializeFirestore,
+      persistentLocalCache,
+      persistentMultipleTabManager,
+      collection,
+      doc,
+      query,
+      orderBy,
+      onSnapshot,
+      addDoc,
+      updateDoc,
+      setDoc,
+      arrayUnion,
+      arrayRemove,
+      serverTimestamp,
+      writeBatch,
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+    // ---- Settings -------------------------------------------------------
+    // From Firebase console → Project settings → Your apps → Web app → Config.
+    // These values are public by design; the security rules protect the data.
+    const firebaseConfig = {
+      apiKey: "AIzaSyAN0EYkvmwqFdvPcXXOhPPFPzOlscKqXfQ",
+      authDomain: "debt-tracker-7dc91.firebaseapp.com",
+      projectId: "debt-tracker-7dc91",
+      storageBucket: "debt-tracker-7dc91.firebasestorage.app",
+      messagingSenderId: "744875404978",
+      appId: "1:744875404978:web:93715ab94af468e67be3ab",
+    };
+    // The Google account that owns this tracker and manages the editor list.
+    // Must match OWNER_EMAIL in the Firestore security rules.
+    const OWNER_EMAIL = "muhammadfirdaus.work@gmail.com";
+    // ---------------------------------------------------------------------
+
+    const LOCAL_KEY = "debt-tracker:v1"; // pre-sync data saved on this phone
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    // Local cache lets the page open instantly and work offline; changes
+    // made offline upload automatically when the connection comes back.
+    const db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+    const debtsRef = collection(db, "debts");
+    const editorsRef = doc(db, "config", "editors");
+
+    const $ = (id) => document.getElementById(id);
     const newId = () =>
       crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-
-    // Sample data from the Figma design. Each debt stores its transactions;
-    // the current balance is derived from them.
-    const SEED = [
-      { name: "Minyak", date: "2026-09-21", amount: 50, payments: [23] },
-      { name: "Lesen", date: "2026-09-21", amount: 90, payments: [] },
-      { name: "Timing Belt", date: "2026-09-21", amount: 71, payments: [] },
-      { name: "Parking", date: "2026-09-21", amount: 400, payments: [] },
-    ].map((d) => ({
-      id: newId(),
-      name: d.name,
-      transactions: [
-        { type: "debt", amount: d.amount, date: d.date },
-        ...d.payments.map((amount) => ({ type: "payment", amount, date: d.date })),
-      ],
-    }));
 
     const moneyFormat = new Intl.NumberFormat("en-MY", {
       minimumFractionDigits: 2,
@@ -440,81 +590,28 @@
       day: "numeric",
       year: "numeric",
     });
+    const timeFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
 
     const formatMoney = (value) => `MYR ${moneyFormat.format(value)}`;
     // Design uses "Sept" rather than Intl's "Sep".
     const formatDate = (iso) =>
       dateFormat.format(new Date(`${iso}T00:00:00`)).replace(/^Sep /, "Sept ");
-    const today = () => new Date().toISOString().slice(0, 10);
+    // Local calendar date (toISOString would give yesterday's date before 8am in Malaysia).
+    const today = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    const normalizeEmail = (email) => (email || "").trim().toLowerCase();
 
-    function loadDebts() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (Array.isArray(saved)) return saved;
-      } catch {
-        // Storage unavailable or corrupt; fall back to seed data.
-      }
-      return structuredClone(SEED);
-    }
+    // ---- State ------------------------------------------------------------
+    let debts = [];
+    let loaded = false;
+    let user = null;
+    let role = "viewer"; // "viewer" | "editor" | "owner"
+    let editorEmails = [];
+    let stopEditorsWatch = null;
 
-    function saveDebts() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(debts));
-        document.getElementById("save-error").hidden = true;
-      } catch {
-        // The app still works for this session, but tell the user it won't last.
-        document.getElementById("save-error").hidden = false;
-      }
-    }
-
-    // Ask the browser not to evict our data under storage pressure / inactivity.
-    navigator.storage?.persist?.().catch(() => {});
-
-    // In-app browsers (WhatsApp, Instagram, Facebook, ...) often use throwaway
-    // storage, so debts added there vanish once the app's browser closes.
-    function detectInAppBrowser() {
-      const ua = navigator.userAgent;
-      const isIOS = /iPhone|iPad|iPod/.test(ua);
-      const isAndroid = /Android/.test(ua);
-      const knownApp = /WhatsApp|FBAN|FBAV|Instagram|Line\/|Telegram|Snapchat|TikTok|musical_ly/i.test(ua);
-      // iOS Safari, Chrome (CriOS) and Firefox (FxiOS) all include "Safari/";
-      // embedded WKWebViews don't. Android WebViews mark themselves with "; wv)".
-      const iosWebView = isIOS && !/Safari\//.test(ua);
-      const androidWebView = isAndroid && /; wv\)/.test(ua);
-      if (!knownApp && !iosWebView && !androidWebView) return null;
-      return { isIOS, isAndroid };
-    }
-
-    function showInAppNotice() {
-      const env = detectInAppBrowser();
-      if (!env) return;
-      const link = document.getElementById("open-in-browser");
-      const text = document.getElementById("in-app-notice-text");
-      const url = location.href;
-
-      if (env.isIOS) {
-        // iOS 17+ opens x-safari-https:// links in Safari.
-        link.href = `x-safari-${url}`;
-        link.textContent = "Open in Safari";
-        text.textContent =
-          "This page is open inside another app's browser, which forgets your data when it closes. " +
-          "Tap Open in Safari, or tap the ⋯ / Share button and choose Open in Safari.";
-      } else if (env.isAndroid) {
-        const { host, pathname, search } = location;
-        link.href = `intent://${host}${pathname}${search}#Intent;scheme=https;package=com.android.chrome;end`;
-        link.textContent = "Open in Chrome";
-        text.textContent =
-          "This page is open inside another app's browser, which forgets your data when it closes. " +
-          "Tap Open in Chrome, or use the ⋮ menu and choose Open in browser.";
-      } else {
-        link.hidden = true;
-      }
-      document.getElementById("in-app-notice").hidden = false;
-    }
-
-    showInAppNotice();
-
-    let debts = loadDebts();
+    const canEdit = () => role === "editor" || role === "owner";
 
     const original = (debt) => debt.transactions[0];
     const balanceOf = (debt) =>
@@ -523,13 +620,51 @@
         0,
       );
 
-    const listEl = document.getElementById("debt-list");
-    const totalEl = document.getElementById("total-balance");
-    const template = document.getElementById("debt-card-template");
+    // ---- Notices ------------------------------------------------------------
+    function showError(title, text) {
+      $("error-title").textContent = title;
+      $("error-text").textContent = text;
+      $("error-notice").hidden = false;
+    }
+    function hideError() {
+      $("error-notice").hidden = true;
+    }
+
+    function readLocalDebts() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(LOCAL_KEY));
+        return Array.isArray(saved) && saved.length ? saved : [];
+      } catch {
+        return [];
+      }
+    }
+
+    // ---- Rendering ----------------------------------------------------------
+    const listEl = $("debt-list");
+    const template = $("debt-card-template");
 
     function render() {
-      const total = debts.reduce((sum, d) => sum + balanceOf(d), 0);
-      totalEl.textContent = formatMoney(total);
+      $("total-balance").textContent = loaded
+        ? formatMoney(debts.reduce((sum, d) => sum + balanceOf(d), 0))
+        : "MYR —";
+
+      // Account row
+      $("sign-in").hidden = !!user;
+      $("sign-out").hidden = !user;
+      $("account-email").hidden = !user;
+      $("account-email").textContent = user ? user.email : "";
+      $("manage-editors").hidden = role !== "owner";
+      $("add-debt").hidden = !canEdit();
+
+      $("import-notice").hidden = !(loaded && canEdit() && debts.length === 0 && readLocalDebts().length);
+
+      if (loaded && debts.length === 0) {
+        const empty = document.createElement("li");
+        empty.className = "empty";
+        empty.textContent = canEdit() ? "No debts yet. Tap + to add one." : "No debts yet.";
+        listEl.replaceChildren(empty);
+        return;
+      }
 
       listEl.replaceChildren(
         ...debts.map((debt) => {
@@ -549,11 +684,162 @@
           progress.setAttribute("aria-label", `${debt.name} remaining balance`);
           card.querySelector(".progress__fill").style.width = `${percent}%`;
 
-          card.querySelector('[data-action="pay"]').disabled = balance <= 0;
+          const pay = card.querySelector('[data-action="pay"]');
+          pay.hidden = !canEdit();
+          pay.disabled = balance <= 0;
           return card;
         }),
       );
     }
+
+    function setStatus(state, text) {
+      const el = $("sync-status");
+      el.dataset.state = state;
+      el.textContent = text;
+    }
+
+    // ---- Live data ----------------------------------------------------------
+    onSnapshot(
+      query(debtsRef, orderBy("createdAt")),
+      { includeMetadataChanges: true },
+      (snap) => {
+        debts = snap.docs
+          .map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) }))
+          .filter((d) => Array.isArray(d.transactions) && d.transactions.length)
+          .map((d) => ({ ...d, transactions: [...d.transactions].sort((a, b) => (a.at ?? 0) - (b.at ?? 0)) }));
+        loaded = true;
+        if (snap.metadata.fromCache) setStatus("offline", "Offline · showing saved copy");
+        else if (snap.metadata.hasPendingWrites) setStatus("live", "Saving…");
+        else setStatus("live", "Live");
+        render();
+        refreshOpenHistory();
+      },
+      (err) => {
+        setStatus("offline", "Not connected");
+        showError("Couldn't load debts", err.message);
+      },
+    );
+
+    // ---- Sign-in & roles ------------------------------------------------------
+    onAuthStateChanged(auth, (signedIn) => {
+      user = signedIn;
+      stopEditorsWatch?.();
+      stopEditorsWatch = null;
+      editorEmails = [];
+
+      const email = normalizeEmail(user?.email);
+      if (!user) {
+        role = "viewer";
+      } else if (email === normalizeEmail(OWNER_EMAIL)) {
+        role = "owner";
+      } else {
+        role = "viewer"; // until the editor list confirms otherwise
+      }
+
+      if (user) {
+        // Only editors may read the editor list, so a permission error means "view only".
+        stopEditorsWatch = onSnapshot(
+          editorsRef,
+          (snap) => {
+            editorEmails = (snap.data()?.emails ?? []).map(normalizeEmail);
+            if (role !== "owner") role = editorEmails.includes(email) ? "editor" : "viewer";
+            render();
+            renderEditors();
+          },
+          () => {
+            if (role !== "owner") {
+              role = "viewer";
+              showError(
+                "View only",
+                `${user.email} isn't allowed to edit. Ask the owner to add this email under Editors.`,
+              );
+            }
+            render();
+          },
+        );
+      } else {
+        hideError();
+      }
+      render();
+    });
+
+    // In-app browsers (WhatsApp, Instagram, ...) block Google sign-in.
+    function detectInAppBrowser() {
+      const ua = navigator.userAgent;
+      const isIOS = /iPhone|iPad|iPod/.test(ua);
+      const isAndroid = /Android/.test(ua);
+      const knownApp = /WhatsApp|FBAN|FBAV|Instagram|Line\/|Telegram|Snapchat|TikTok|musical_ly/i.test(ua);
+      // iOS Safari, Chrome (CriOS) and Firefox (FxiOS) all include "Safari/";
+      // embedded WKWebViews don't. Android WebViews mark themselves with "; wv)".
+      const iosWebView = isIOS && !/Safari\//.test(ua);
+      const androidWebView = isAndroid && /; wv\)/.test(ua);
+      if (!knownApp && !iosWebView && !androidWebView) return null;
+      return { isIOS, isAndroid };
+    }
+
+    function showInAppNotice(env) {
+      const link = $("open-in-browser");
+      const text = $("in-app-notice-text");
+      const url = location.href;
+      if (env.isIOS) {
+        // iOS 17+ opens x-safari-https:// links in Safari.
+        link.href = `x-safari-${url}`;
+        link.textContent = "Open in Safari";
+        text.textContent =
+          "Google sign-in doesn't work inside another app's browser. " +
+          "Tap Open in Safari, or tap the ⋯ / Share button and choose Open in Safari.";
+      } else if (env.isAndroid) {
+        const { host, pathname, search } = location;
+        link.href = `intent://${host}${pathname}${search}#Intent;scheme=https;package=com.android.chrome;end`;
+        link.textContent = "Open in Chrome";
+        text.textContent =
+          "Google sign-in doesn't work inside another app's browser. " +
+          "Tap Open in Chrome, or use the ⋮ menu and choose Open in browser.";
+      } else {
+        link.hidden = true;
+      }
+      $("in-app-notice").hidden = false;
+      $("in-app-notice").scrollIntoView({ behavior: "smooth" });
+    }
+
+    $("sign-in").addEventListener("click", async () => {
+      const inApp = detectInAppBrowser();
+      if (inApp) return showInAppNotice(inApp);
+
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      try {
+        hideError();
+        await signInWithPopup(auth, provider);
+      } catch (err) {
+        if (err.code === "auth/popup-blocked" || err.code === "auth/operation-not-supported-in-this-environment") {
+          await signInWithRedirect(auth, provider);
+        } else if (err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {
+          showError("Couldn't sign in", err.message);
+        }
+      }
+    });
+
+    $("sign-out").addEventListener("click", () => signOut(auth));
+
+    // ---- Writes ---------------------------------------------------------------
+    function reportWriteError(err) {
+      showError(
+        "Couldn't save your change",
+        err.code === "permission-denied"
+          ? "You don't have permission to edit. Ask the owner to add your email under Editors."
+          : err.message,
+      );
+    }
+
+    const makeTransaction = (type, amount, date) => ({
+      id: newId(),
+      type,
+      amount,
+      date,
+      at: Date.now(),
+      by: normalizeEmail(user?.email),
+    });
 
     // Dialog helpers
     document.querySelectorAll("dialog [data-close]").forEach((btn) => {
@@ -566,29 +852,26 @@
     });
 
     // Add debt
-    const addDialog = document.getElementById("add-dialog");
-    const addForm = document.getElementById("add-form");
-
-    document.getElementById("add-debt").addEventListener("click", () => {
+    const addForm = $("add-form");
+    $("add-debt").addEventListener("click", () => {
       addForm.reset();
       addForm.elements.date.value = today();
-      addDialog.showModal();
+      $("add-dialog").showModal();
     });
 
     addForm.addEventListener("submit", () => {
       const data = new FormData(addForm);
-      debts.push({
-        id: newId(),
+      // Firestore applies the write locally first, so the card appears
+      // immediately; the promise settles once the server confirms.
+      addDoc(debtsRef, {
         name: data.get("name").trim(),
-        transactions: [{ type: "debt", amount: Number(data.get("amount")), date: data.get("date") }],
-      });
-      saveDebts();
-      render();
+        createdAt: serverTimestamp(),
+        transactions: [makeTransaction("debt", Number(data.get("amount")), data.get("date"))],
+      }).catch(reportWriteError);
     });
 
     // Make payment
-    const payDialog = document.getElementById("pay-dialog");
-    const payForm = document.getElementById("pay-form");
+    const payForm = $("pay-form");
     let payingId = null;
 
     function openPayment(debt) {
@@ -596,42 +879,42 @@
       const balance = balanceOf(debt);
       payForm.reset();
       payForm.elements.amount.max = balance.toFixed(2);
-      document.getElementById("pay-title").textContent = `Pay ${debt.name}`;
-      document.getElementById("pay-subtitle").textContent = `Current balance ${formatMoney(balance)}`;
-      payDialog.showModal();
+      $("pay-title").textContent = `Pay ${debt.name}`;
+      $("pay-subtitle").textContent = `Current balance ${formatMoney(balance)}`;
+      $("pay-dialog").showModal();
     }
 
     payForm.addEventListener("submit", () => {
-      const debt = debts.find((d) => d.id === payingId);
-      if (!debt) return;
-      debt.transactions.push({
-        type: "payment",
-        amount: Number(payForm.elements.amount.value),
-        date: today(),
-      });
-      saveDebts();
-      render();
+      // arrayUnion appends atomically, so two people paying at once both count.
+      updateDoc(doc(debtsRef, payingId), {
+        transactions: arrayUnion(makeTransaction("payment", Number(payForm.elements.amount.value), today())),
+      }).catch(reportWriteError);
     });
 
-    // Transaction history
-    const historyDialog = document.getElementById("history-dialog");
-    const historyList = document.getElementById("history-list");
+    // Transaction history (updates live while open)
+    let historyId = null;
 
-    function openHistory(debt) {
-      document.getElementById("history-title").textContent = `${debt.name} history`;
-      historyList.replaceChildren(
+    function renderHistory() {
+      const debt = debts.find((d) => d.id === historyId);
+      if (!debt) return;
+      $("history-title").textContent = `${debt.name} history`;
+      $("history-list").replaceChildren(
         ...[...debt.transactions].reverse().map((t) => {
           const li = document.createElement("li");
           li.className = "text-subheadline";
           const label = document.createElement("span");
-          label.textContent = `${t.type === "payment" ? "Payment" : "Borrowed"} · ${formatDate(t.date)}`;
+          const when = t.at ? `${formatDate(t.date)}, ${timeFormat.format(t.at)}` : formatDate(t.date);
+          const who = t.by ? ` · ${t.by.split("@")[0]}` : "";
+          label.textContent = `${t.type === "payment" ? "Payment" : "Borrowed"} · ${when}${who}`;
           const amount = document.createElement("span");
           amount.textContent = `${t.type === "payment" ? "−" : "+"}${formatMoney(t.amount)}`;
           li.append(label, amount);
           return li;
         }),
       );
-      historyDialog.showModal();
+    }
+    function refreshOpenHistory() {
+      if ($("history-dialog").open) renderHistory();
     }
 
     listEl.addEventListener("click", (e) => {
@@ -639,8 +922,79 @@
       if (!button) return;
       const debt = debts.find((d) => d.id === button.closest(".debt-card").dataset.id);
       if (!debt) return;
-      if (button.dataset.action === "pay") openPayment(debt);
-      else openHistory(debt);
+      if (button.dataset.action === "pay") {
+        openPayment(debt);
+      } else {
+        historyId = debt.id;
+        renderHistory();
+        $("history-dialog").showModal();
+      }
+    });
+
+    // Upload debts that were saved only on this phone before syncing existed
+    $("import-local").addEventListener("click", async () => {
+      const local = readLocalDebts();
+      if (!local.length) return;
+      const batch = writeBatch(db);
+      const base = Date.now();
+      local.forEach((d, i) => {
+        batch.set(doc(debtsRef), {
+          name: String(d.name).slice(0, 100),
+          createdAt: serverTimestamp(),
+          transactions: d.transactions.map((t, j) => ({
+            id: newId(),
+            type: t.type === "payment" ? "payment" : "debt",
+            amount: Number(t.amount),
+            date: t.date,
+            at: base + i * 1000 + j, // keep original order
+            by: normalizeEmail(user?.email),
+          })),
+        });
+      });
+      try {
+        await batch.commit();
+        localStorage.removeItem(LOCAL_KEY);
+        render();
+      } catch (err) {
+        reportWriteError(err);
+      }
+    });
+
+    // ---- Editors (owner only) ------------------------------------------------
+    function renderEditors() {
+      $("editor-list").replaceChildren(
+        ...(editorEmails.length
+          ? editorEmails.map((email) => {
+              const li = document.createElement("li");
+              li.className = "text-subheadline";
+              const label = document.createElement("span");
+              label.textContent = email;
+              const remove = document.createElement("button");
+              remove.type = "button";
+              remove.className = "link-button";
+              remove.textContent = "Remove";
+              remove.addEventListener("click", () =>
+                updateDoc(editorsRef, { emails: arrayRemove(email) }).catch(reportWriteError),
+              );
+              li.append(label, remove);
+              return li;
+            })
+          : [Object.assign(document.createElement("li"), { className: "empty", textContent: "Only you can edit right now." })]),
+      );
+    }
+
+    $("manage-editors").addEventListener("click", () => {
+      renderEditors();
+      $("editors-dialog").showModal();
+    });
+
+    $("editor-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = e.target.elements.email;
+      const email = normalizeEmail(input.value);
+      if (!email) return;
+      setDoc(editorsRef, { emails: arrayUnion(email) }, { merge: true }).catch(reportWriteError);
+      input.value = "";
     });
 
     render();
