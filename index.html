@@ -87,6 +87,36 @@
       padding: calc(env(safe-area-inset-top) + 42px) 16px calc(env(safe-area-inset-bottom) + 32px);
     }
 
+    /* Storage warning (in-app browsers, failed saves) */
+    .notice {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid var(--color-progress);
+      border-radius: var(--radius-card);
+      background: var(--color-summary-bg);
+    }
+    .notice[hidden] {
+      display: none;
+    }
+    .notice__title {
+      font-size: 15px;
+      line-height: 20px;
+      letter-spacing: -0.23px;
+      font-weight: 600;
+    }
+    .notice__text {
+      font-size: 13px;
+      line-height: 18px;
+      letter-spacing: -0.08px;
+    }
+    .notice .button {
+      text-decoration: none;
+      color: inherit;
+    }
+
     /* Summary card */
     .summary {
       display: flex;
@@ -273,6 +303,22 @@
 </head>
 <body>
   <main class="app">
+    <section class="notice" id="in-app-notice" role="alert" hidden>
+      <p class="notice__title">Your debts won't be saved here</p>
+      <p class="notice__text" id="in-app-notice-text">
+        This page is open inside another app's browser, which forgets your data when it closes.
+        Open it in your phone's browser to keep your debts.
+      </p>
+      <a class="button button--filled" id="open-in-browser" href="#">Open in Safari</a>
+    </section>
+
+    <section class="notice" id="save-error" role="alert" hidden>
+      <p class="notice__title">Couldn't save your changes</p>
+      <p class="notice__text">
+        Your browser is blocking storage (for example in Private Browsing). Changes will be lost when you close this page.
+      </p>
+    </section>
+
     <section class="summary" aria-live="polite">
       <p class="summary__name" id="owner-name">Nurul Nadhira</p>
       <p class="summary__total" id="total-balance">MYR 0.00</p>
@@ -414,10 +460,59 @@
     function saveDebts() {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(debts));
+        document.getElementById("save-error").hidden = true;
       } catch {
-        // Ignore; the app still works for this session.
+        // The app still works for this session, but tell the user it won't last.
+        document.getElementById("save-error").hidden = false;
       }
     }
+
+    // Ask the browser not to evict our data under storage pressure / inactivity.
+    navigator.storage?.persist?.().catch(() => {});
+
+    // In-app browsers (WhatsApp, Instagram, Facebook, ...) often use throwaway
+    // storage, so debts added there vanish once the app's browser closes.
+    function detectInAppBrowser() {
+      const ua = navigator.userAgent;
+      const isIOS = /iPhone|iPad|iPod/.test(ua);
+      const isAndroid = /Android/.test(ua);
+      const knownApp = /WhatsApp|FBAN|FBAV|Instagram|Line\/|Telegram|Snapchat|TikTok|musical_ly/i.test(ua);
+      // iOS Safari, Chrome (CriOS) and Firefox (FxiOS) all include "Safari/";
+      // embedded WKWebViews don't. Android WebViews mark themselves with "; wv)".
+      const iosWebView = isIOS && !/Safari\//.test(ua);
+      const androidWebView = isAndroid && /; wv\)/.test(ua);
+      if (!knownApp && !iosWebView && !androidWebView) return null;
+      return { isIOS, isAndroid };
+    }
+
+    function showInAppNotice() {
+      const env = detectInAppBrowser();
+      if (!env) return;
+      const link = document.getElementById("open-in-browser");
+      const text = document.getElementById("in-app-notice-text");
+      const url = location.href;
+
+      if (env.isIOS) {
+        // iOS 17+ opens x-safari-https:// links in Safari.
+        link.href = `x-safari-${url}`;
+        link.textContent = "Open in Safari";
+        text.textContent =
+          "This page is open inside another app's browser, which forgets your data when it closes. " +
+          "Tap Open in Safari, or tap the ⋯ / Share button and choose Open in Safari.";
+      } else if (env.isAndroid) {
+        const { host, pathname, search } = location;
+        link.href = `intent://${host}${pathname}${search}#Intent;scheme=https;package=com.android.chrome;end`;
+        link.textContent = "Open in Chrome";
+        text.textContent =
+          "This page is open inside another app's browser, which forgets your data when it closes. " +
+          "Tap Open in Chrome, or use the ⋮ menu and choose Open in browser.";
+      } else {
+        link.hidden = true;
+      }
+      document.getElementById("in-app-notice").hidden = false;
+    }
+
+    showInAppNotice();
 
     let debts = loadDebts();
 
