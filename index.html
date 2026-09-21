@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Debt Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      /* Colors from the Figma design */
+      --color-bg: #ffffff;
+      --color-text: #000000;
+      --color-summary-bg: #fcf9f9;
+      --color-summary-border: #757575;
+      --color-card-border: #e0e8e4;
+      --color-button-border: #a1a0a3;
+      --color-button-fill: #f3f6f4;
+      --color-track: #f5f5f5;
+      --color-progress: #b44e48;
+      --color-icon-bg: #d9d9d9;
+
+      --radius-card: 16px;
+      --radius-pill: 99px;
+
+      --font-system: -apple-system, "SF Pro Text", "SF Pro", system-ui, "Helvetica Neue", Arial, sans-serif;
+      --font-ui: "Inter", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-family: var(--font-system);
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    p,
+    h2 {
+      margin: 0;
+    }
+
+    button {
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    /* Type styles (iOS text styles from the design) */
+    .text-subheadline {
+      font-size: 15px;
+      line-height: 20px;
+      letter-spacing: -0.23px;
+    }
+    .text-caption {
+      font-size: 11px;
+      line-height: 13px;
+      letter-spacing: 0.06px;
+    }
+
+    /* Layout: mobile-only, full width of the phone */
+    .app {
+      padding: calc(env(safe-area-inset-top) + 42px) 16px calc(env(safe-area-inset-bottom) + 32px);
+    }
+
+    /* Summary card */
+    .summary {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 14px 12px;
+      background: var(--color-summary-bg);
+      border: 1px solid var(--color-summary-border);
+      border-radius: var(--radius-card);
+    }
+    .summary__name {
+      font-size: 13px;
+      line-height: 18px;
+      letter-spacing: -0.08px;
+    }
+    .summary__total {
+      font-size: 22px;
+      line-height: 28px;
+      letter-spacing: -0.26px;
+    }
+
+    /* Add button */
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      padding: 27px 1px 19px 0;
+    }
+    .icon-button {
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: 0;
+      border-radius: var(--radius-pill);
+      background: var(--color-icon-bg);
+    }
+    .icon-button svg {
+      display: block;
+    }
+
+    /* Debt cards */
+    .debt-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .debt-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px 16px;
+      border: 1px solid var(--color-card-border);
+      border-radius: var(--radius-card);
+    }
+    .debt-card__body {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .debt-card__row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .debt-card__info {
+      min-width: 0;
+    }
+    .debt-card__title {
+      overflow-wrap: anywhere;
+    }
+    .debt-card__balance {
+      flex-shrink: 0;
+      text-align: right;
+    }
+
+    .progress {
+      height: 16px;
+      border-radius: var(--radius-pill);
+      background: var(--color-track);
+      overflow: hidden;
+    }
+    .progress__fill {
+      height: 100%;
+      border-radius: var(--radius-pill);
+      background: var(--color-progress);
+      transition: width 0.3s ease;
+    }
+
+    .debt-card__actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Buttons */
+    .button {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      border-radius: var(--radius-card);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      line-height: normal;
+      white-space: nowrap;
+    }
+    .button--outline {
+      background: transparent;
+      border: 1px solid var(--color-button-border);
+    }
+    .button--filled {
+      background: var(--color-button-fill);
+      border: 1px solid var(--color-button-fill);
+    }
+    .button--block {
+      width: 100%;
+      flex: none;
+    }
+    .button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    /* Dialogs */
+    .sheet {
+      width: calc(100vw - 32px);
+      padding: 0;
+      border: 1px solid var(--color-card-border);
+      border-radius: var(--radius-card);
+      background: var(--color-bg);
+      color: var(--color-text);
+    }
+    .sheet::backdrop {
+      background: rgba(0, 0, 0, 0.25);
+    }
+    .sheet__form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+    }
+    .sheet__title {
+      font-size: 17px;
+      line-height: 22px;
+      font-weight: 600;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .field input {
+      padding: 10px 12px;
+      border: 1px solid var(--color-button-border);
+      border-radius: 12px;
+      font: inherit;
+      font-size: 16px; /* 16px stops iOS Safari zooming on focus */
+    }
+
+    .history {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+    .history li {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--color-card-border);
+    }
+    .history li:last-child {
+      border-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="summary" aria-live="polite">
+      <p class="summary__name" id="owner-name">Nurul Nadhira</p>
+      <p class="summary__total" id="total-balance">MYR 0.00</p>
+    </section>
+
+    <div class="toolbar">
+      <button class="icon-button" id="add-debt" type="button" aria-label="Add debt">
+        <!-- Plus icon from Figma (node 1:164) -->
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 5V19M5 12H19" stroke="#A1A0A3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <ul class="debt-list" id="debt-list"></ul>
+  </main>
+
+  <template id="debt-card-template">
+    <li class="debt-card">
+      <div class="debt-card__body">
+        <div class="debt-card__row">
+          <div class="debt-card__info">
+            <p class="text-subheadline debt-card__title"></p>
+            <p class="text-caption debt-card__meta"></p>
+          </div>
+          <div class="debt-card__balance">
+            <p class="text-caption">Current balance</p>
+            <p class="text-subheadline debt-card__balance-value"></p>
+          </div>
+        </div>
+        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress__fill"></div>
+        </div>
+      </div>
+      <div class="debt-card__actions">
+        <button class="button button--outline" type="button" data-action="history">Transaction History</button>
+        <button class="button button--filled" type="button" data-action="pay">Make Payment</button>
+      </div>
+    </li>
+  </template>
+
+  <!-- Add debt -->
+  <dialog class="sheet" id="add-dialog">
+    <form method="dialog" class="sheet__form" id="add-form">
+      <h2 class="sheet__title">Add debt</h2>
+      <label class="field">
+        <span class="text-caption">Name</span>
+        <input name="name" type="text" required autocomplete="off" />
+      </label>
+      <label class="field">
+        <span class="text-caption">Amount (MYR)</span>
+        <input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required />
+      </label>
+      <label class="field">
+        <span class="text-caption">Date</span>
+        <input name="date" type="date" required />
+      </label>
+      <div class="debt-card__actions">
+        <button class="button button--outline" type="button" data-close>Cancel</button>
+        <button class="button button--filled" type="submit">Add</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Make payment -->
+  <dialog class="sheet" id="pay-dialog">
+    <form method="dialog" class="sheet__form" id="pay-form">
+      <h2 class="sheet__title" id="pay-title">Make payment</h2>
+      <p class="text-caption" id="pay-subtitle"></p>
+      <label class="field">
+        <span class="text-caption">Amount (MYR)</span>
+        <input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required />
+      </label>
+      <div class="debt-card__actions">
+        <button class="button button--outline" type="button" data-close>Cancel</button>
+        <button class="button button--filled" type="submit">Pay</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Transaction history -->
+  <dialog class="sheet" id="history-dialog">
+    <div class="sheet__form">
+      <h2 class="sheet__title" id="history-title">Transaction history</h2>
+      <ul class="history" id="history-list"></ul>
+      <button class="button button--outline button--block" type="button" data-close>Close</button>
+    </div>
+  </dialog>
+
+  <script>
+    const STORAGE_KEY = "debt-tracker:v1";
+
+    // crypto.randomUUID needs a secure context, which file:// isn't in every browser.
+    const newId = () =>
+      crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+    // Sample data from the Figma design. Each debt stores its transactions;
+    // the current balance is derived from them.
+    const SEED = [
+      { name: "Minyak", date: "2026-09-21", amount: 50, payments: [23] },
+      { name: "Lesen", date: "2026-09-21", amount: 90, payments: [] },
+      { name: "Timing Belt", date: "2026-09-21", amount: 71, payments: [] },
+      { name: "Parking", date: "2026-09-21", amount: 400, payments: [] },
+    ].map((d) => ({
+      id: newId(),
+      name: d.name,
+      transactions: [
+        { type: "debt", amount: d.amount, date: d.date },
+        ...d.payments.map((amount) => ({ type: "payment", amount, date: d.date })),
+      ],
+    }));
+
+    const moneyFormat = new Intl.NumberFormat("en-MY", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const dateFormat = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    const formatMoney = (value) => `MYR ${moneyFormat.format(value)}`;
+    // Design uses "Sept" rather than Intl's "Sep".
+    const formatDate = (iso) =>
+      dateFormat.format(new Date(`${iso}T00:00:00`)).replace(/^Sep /, "Sept ");
+    const today = () => new Date().toISOString().slice(0, 10);
+
+    function loadDebts() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (Array.isArray(saved)) return saved;
+      } catch {
+        // Storage unavailable or corrupt; fall back to seed data.
+      }
+      return structuredClone(SEED);
+    }
+
+    function saveDebts() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(debts));
+      } catch {
+        // Ignore; the app still works for this session.
+      }
+    }
+
+    let debts = loadDebts();
+
+    const original = (debt) => debt.transactions[0];
+    const balanceOf = (debt) =>
+      debt.transactions.reduce(
+        (sum, t) => (t.type === "payment" ? sum - t.amount : sum + t.amount),
+        0,
+      );
+
+    const listEl = document.getElementById("debt-list");
+    const totalEl = document.getElementById("total-balance");
+    const template = document.getElementById("debt-card-template");
+
+    function render() {
+      const total = debts.reduce((sum, d) => sum + balanceOf(d), 0);
+      totalEl.textContent = formatMoney(total);
+
+      listEl.replaceChildren(
+        ...debts.map((debt) => {
+          const card = template.content.firstElementChild.cloneNode(true);
+          const first = original(debt);
+          const balance = balanceOf(debt);
+          const percent = first.amount > 0 ? Math.min(100, Math.max(0, (balance / first.amount) * 100)) : 0;
+
+          card.dataset.id = debt.id;
+          card.querySelector(".debt-card__title").textContent = debt.name;
+          card.querySelector(".debt-card__meta").textContent =
+            `${formatMoney(first.amount)} / ${formatDate(first.date)}`;
+          card.querySelector(".debt-card__balance-value").textContent = formatMoney(balance);
+
+          const progress = card.querySelector(".progress");
+          progress.setAttribute("aria-valuenow", Math.round(percent));
+          progress.setAttribute("aria-label", `${debt.name} remaining balance`);
+          card.querySelector(".progress__fill").style.width = `${percent}%`;
+
+          card.querySelector('[data-action="pay"]').disabled = balance <= 0;
+          return card;
+        }),
+      );
+    }
+
+    // Dialog helpers
+    document.querySelectorAll("dialog [data-close]").forEach((btn) => {
+      btn.addEventListener("click", () => btn.closest("dialog").close());
+    });
+    document.querySelectorAll("dialog").forEach((dialog) => {
+      dialog.addEventListener("click", (e) => {
+        if (e.target === dialog) dialog.close(); // backdrop tap
+      });
+    });
+
+    // Add debt
+    const addDialog = document.getElementById("add-dialog");
+    const addForm = document.getElementById("add-form");
+
+    document.getElementById("add-debt").addEventListener("click", () => {
+      addForm.reset();
+      addForm.elements.date.value = today();
+      addDialog.showModal();
+    });
+
+    addForm.addEventListener("submit", () => {
+      const data = new FormData(addForm);
+      debts.push({
+        id: newId(),
+        name: data.get("name").trim(),
+        transactions: [{ type: "debt", amount: Number(data.get("amount")), date: data.get("date") }],
+      });
+      saveDebts();
+      render();
+    });
+
+    // Make payment
+    const payDialog = document.getElementById("pay-dialog");
+    const payForm = document.getElementById("pay-form");
+    let payingId = null;
+
+    function openPayment(debt) {
+      payingId = debt.id;
+      const balance = balanceOf(debt);
+      payForm.reset();
+      payForm.elements.amount.max = balance.toFixed(2);
+      document.getElementById("pay-title").textContent = `Pay ${debt.name}`;
+      document.getElementById("pay-subtitle").textContent = `Current balance ${formatMoney(balance)}`;
+      payDialog.showModal();
+    }
+
+    payForm.addEventListener("submit", () => {
+      const debt = debts.find((d) => d.id === payingId);
+      if (!debt) return;
+      debt.transactions.push({
+        type: "payment",
+        amount: Number(payForm.elements.amount.value),
+        date: today(),
+      });
+      saveDebts();
+      render();
+    });
+
+    // Transaction history
+    const historyDialog = document.getElementById("history-dialog");
+    const historyList = document.getElementById("history-list");
+
+    function openHistory(debt) {
+      document.getElementById("history-title").textContent = `${debt.name} history`;
+      historyList.replaceChildren(
+        ...[...debt.transactions].reverse().map((t) => {
+          const li = document.createElement("li");
+          li.className = "text-subheadline";
+          const label = document.createElement("span");
+          label.textContent = `${t.type === "payment" ? "Payment" : "Borrowed"} · ${formatDate(t.date)}`;
+          const amount = document.createElement("span");
+          amount.textContent = `${t.type === "payment" ? "−" : "+"}${formatMoney(t.amount)}`;
+          li.append(label, amount);
+          return li;
+        }),
+      );
+      historyDialog.showModal();
+    }
+
+    listEl.addEventListener("click", (e) => {
+      const button = e.target.closest("button[data-action]");
+      if (!button) return;
+      const debt = debts.find((d) => d.id === button.closest(".debt-card").dataset.id);
+      if (!debt) return;
+      if (button.dataset.action === "pay") openPayment(debt);
+      else openHistory(debt);
+    });
+
+    render();
+  </script>
+</body>
+</html>
