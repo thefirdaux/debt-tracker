@@ -383,6 +383,35 @@
       flex: none;
       padding: 10px 16px;
     }
+
+    /* Edit / delete */
+    .debt-card__title-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .edit-button {
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: 0;
+      border-radius: var(--radius-pill);
+      background: transparent;
+    }
+    .edit-button[hidden] {
+      display: none;
+    }
+    .edit-button svg {
+      display: block;
+    }
+    .button--danger {
+      background: transparent;
+      border: 1px solid var(--color-progress);
+      color: var(--color-progress);
+    }
   </style>
 </head>
 <body>
@@ -437,7 +466,14 @@
       <div class="debt-card__body">
         <div class="debt-card__row">
           <div class="debt-card__info">
-            <p class="text-subheadline debt-card__title"></p>
+            <div class="debt-card__title-row">
+              <p class="text-subheadline debt-card__title"></p>
+              <button class="edit-button" type="button" data-action="edit" aria-label="Edit debt" hidden>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke="#A1A0A3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
             <p class="text-caption debt-card__meta"></p>
           </div>
           <div class="debt-card__balance">
@@ -495,6 +531,31 @@
     </form>
   </dialog>
 
+  <!-- Edit / delete debt -->
+  <dialog class="sheet" id="edit-dialog">
+    <form method="dialog" class="sheet__form" id="edit-form">
+      <h2 class="sheet__title">Edit debt</h2>
+      <label class="field">
+        <span class="text-caption">Name</span>
+        <input name="name" type="text" required maxlength="100" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span class="text-caption">Amount (MYR)</span>
+        <input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required />
+      </label>
+      <label class="field">
+        <span class="text-caption">Date</span>
+        <input name="date" type="date" required />
+      </label>
+      <p class="text-caption" id="edit-hint"></p>
+      <div class="debt-card__actions">
+        <button class="button button--outline" type="button" data-close>Cancel</button>
+        <button class="button button--filled" type="submit">Save</button>
+      </div>
+      <button class="button button--danger button--block" type="button" id="delete-debt">Delete debt</button>
+    </form>
+  </dialog>
+
   <!-- Transaction history -->
   <dialog class="sheet" id="history-dialog">
     <div class="sheet__form">
@@ -545,6 +606,8 @@
       setDoc,
       arrayUnion,
       arrayRemove,
+      deleteDoc,
+      runTransaction,
       serverTimestamp,
       writeBatch,
     } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
@@ -683,6 +746,8 @@
           progress.setAttribute("aria-valuenow", Math.round(percent));
           progress.setAttribute("aria-label", `${debt.name} remaining balance`);
           card.querySelector(".progress__fill").style.width = `${percent}%`;
+
+          card.querySelector('[data-action="edit"]').hidden = !canEdit();
 
           const pay = card.querySelector('[data-action="pay"]');
           pay.hidden = !canEdit();
@@ -917,6 +982,55 @@
       if ($("history-dialog").open) renderHistory();
     }
 
+    // Edit / delete debt
+    const editForm = $("edit-form");
+    let editingId = null;
+
+    const paidOf = (debt) =>
+      debt.transactions.reduce((sum, t) => (t.type === "payment" ? sum + t.amount : sum), 0);
+
+    function openEdit(debt) {
+      editingId = debt.id;
+      const first = original(debt);
+      const paid = paidOf(debt);
+      editForm.elements.name.value = debt.name;
+      editForm.elements.amount.value = first.amount.toFixed(2);
+      // The amount can't go below what's already been paid.
+      editForm.elements.amount.min = Math.max(0.01, paid).toFixed(2);
+      editForm.elements.date.value = first.date;
+      $("edit-hint").textContent = paid > 0 ? `Already paid ${formatMoney(paid)}.` : "";
+      $("edit-dialog").showModal();
+    }
+
+    editForm.addEventListener("submit", () => {
+      const debt = debts.find((d) => d.id === editingId);
+      if (!debt) return;
+      const originalId = original(debt).id;
+      const name = editForm.elements.name.value.trim();
+      const amount = Number(editForm.elements.amount.value);
+      const date = editForm.elements.date.value;
+      const ref = doc(debtsRef, editingId);
+
+      // Read-modify-write in a transaction so a payment someone adds
+      // at the same moment isn't overwritten.
+      runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error("This debt was deleted.");
+        const transactions = snap.data().transactions.map((t) =>
+          t.id === originalId ? { ...t, amount, date } : t,
+        );
+        tx.update(ref, { name, transactions });
+      }).catch(reportWriteError);
+    });
+
+    $("delete-debt").addEventListener("click", () => {
+      const debt = debts.find((d) => d.id === editingId);
+      if (!debt) return;
+      if (!confirm(`Delete "${debt.name}" and its transaction history? This can't be undone.`)) return;
+      $("edit-dialog").close();
+      deleteDoc(doc(debtsRef, editingId)).catch(reportWriteError);
+    });
+
     listEl.addEventListener("click", (e) => {
       const button = e.target.closest("button[data-action]");
       if (!button) return;
@@ -924,6 +1038,8 @@
       if (!debt) return;
       if (button.dataset.action === "pay") {
         openPayment(debt);
+      } else if (button.dataset.action === "edit") {
+        openEdit(debt);
       } else {
         historyId = debt.id;
         renderHistory();

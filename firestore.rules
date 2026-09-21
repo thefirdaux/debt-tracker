@@ -42,12 +42,12 @@ service cloud.firestore {
       allow create: if isEditor()
         && validDebt(request.resource.data)
         && request.resource.data.createdAt == request.time;
-      // Payments only append transactions; name and creation time stay fixed.
+      // Editors can add payments and edit the name, amount and date.
+      // Creation time stays fixed so the list order doesn't change.
       allow update: if isEditor()
         && validDebt(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['transactions'])
-        && request.resource.data.transactions.size() > resource.data.transactions.size();
-      allow delete: if isOwner();
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isEditor();
     }
 
     match /config/editors {
