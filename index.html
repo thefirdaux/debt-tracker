@@ -4,6 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#ffffff" />
+
+  <!-- Installable app (Add to Home Screen) -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Debts" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Debt Tracker</title>
   <meta name="description" content="Track what you owe, log payments and watch balances go down." />
 
@@ -407,6 +416,9 @@
     .edit-button svg {
       display: block;
     }
+    .notice--quiet {
+      border-color: var(--color-card-border);
+    }
     .button--danger {
       background: transparent;
       border: 1px solid var(--color-progress);
@@ -422,6 +434,15 @@
         Google sign-in doesn't work inside another app's browser. Open this page in your phone's browser to sign in.
       </p>
       <a class="button button--filled" id="open-in-browser" href="#">Open in Safari</a>
+    </section>
+
+    <section class="notice notice--quiet" id="install-notice" hidden>
+      <p class="notice__title">Add Debt Tracker to your Home Screen</p>
+      <p class="notice__text" id="install-text"></p>
+      <div class="debt-card__actions">
+        <button class="button button--outline" id="install-dismiss" type="button">Not now</button>
+        <button class="button button--filled" id="install-app" type="button" hidden>Install</button>
+      </div>
     </section>
 
     <section class="notice" id="error-notice" role="alert" hidden>
@@ -1111,6 +1132,66 @@
       if (!email) return;
       setDoc(editorsRef, { emails: arrayUnion(email) }, { merge: true }).catch(reportWriteError);
       input.value = "";
+    });
+
+    // ---- Add to Home Screen ---------------------------------------------------
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+
+    const INSTALL_DISMISSED_KEY = "debt-tracker:install-dismissed";
+    const isStandalone =
+      matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+
+    function installDismissed() {
+      try {
+        return localStorage.getItem(INSTALL_DISMISSED_KEY) === "1";
+      } catch {
+        return false;
+      }
+    }
+
+    function showInstallTip(text, canPrompt) {
+      if (isStandalone || installDismissed() || detectInAppBrowser()) return;
+      $("install-text").textContent = text;
+      $("install-app").hidden = !canPrompt;
+      $("install-notice").hidden = false;
+    }
+
+    $("install-dismiss").addEventListener("click", () => {
+      $("install-notice").hidden = true;
+      try {
+        localStorage.setItem(INSTALL_DISMISSED_KEY, "1");
+      } catch {
+        // Tip just shows again next time.
+      }
+    });
+
+    // iPhone/iPad Safari has no install prompt, so explain the Share menu.
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      showInstallTip(
+        "Tap the Share button (square with an arrow), then Add to Home Screen. " +
+          "It opens full screen like an app. You'll need to sign in once more there.",
+        false,
+      );
+    }
+
+    // Android Chrome offers a real install prompt.
+    let installPrompt = null;
+    addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      installPrompt = e;
+      showInstallTip("Install it for quick access from your Home Screen, full screen like an app.", true);
+    });
+    $("install-app").addEventListener("click", async () => {
+      if (!installPrompt) return;
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      $("install-notice").hidden = true;
+    });
+    addEventListener("appinstalled", () => {
+      $("install-notice").hidden = true;
     });
 
     render();
